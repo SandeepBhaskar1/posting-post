@@ -17,7 +17,7 @@ const FRONTEND_URI = process.env.NODE_ENV === 'production'
 app.use(express.json());
 app.use(cookieParser());
 app.use(cors({
-    origin: FRONTEND_URI,
+    origin: 'https://posting-post-frontend.vercel.app',
     methods: ['GET', 'POST'],
     credentials: true,
 }));
