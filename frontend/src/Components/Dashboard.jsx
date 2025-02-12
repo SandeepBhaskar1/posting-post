@@ -20,7 +20,11 @@ const Dashboard = () => {
         const checkAuthentication = async () => {
             try {
                 const response = await fetch(`${BACKEND_URL}/checkAuth`, {
-                    credentials: 'include'
+                    credentials: 'include',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    }
                 });
 
                 if (!response.ok) {
@@ -42,7 +46,13 @@ const Dashboard = () => {
     useEffect(() => {
         const fetchPosts = async () => {
             try {
-                const response = await fetch(`${BACKEND_URL}/posts`);
+                const response = await fetch(`${BACKEND_URL}/posts`,{
+                    credentials: 'include',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    }
+                });
                 if (response.ok) {
                     const data = await response.json();
                     setPosts(data.posts);
