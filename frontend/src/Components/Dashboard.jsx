@@ -100,8 +100,8 @@ const Dashboard = () => {
                 },
                 credentials: 'include',
                 body: JSON.stringify({
-                    title: newPostTitle,  // Include title in the request
-                    content: newPostContent,  // Include content in the request
+                    title: newPostTitle,  
+                    content: newPostContent,  
                 }),
             });
 
@@ -114,8 +114,8 @@ const Dashboard = () => {
 
             if (response.ok) {
                 setPosts([data.post, ...posts]);
-                setNewPostTitle('');  // Reset title after posting
-                setNewPostContent('');  // Reset content after posting
+                setNewPostTitle('');  
+                setNewPostContent('');  
             } else {
                 alert(data.message || 'Failed to post');
             }
@@ -143,7 +143,7 @@ const Dashboard = () => {
                     className="w-full p-2 border rounded mb-4"
                     placeholder="Post Title"
                     value={newPostTitle}
-                    onChange={(e) => setNewPostTitle(e.target.value)} // Handle title change
+                    onChange={(e) => setNewPostTitle(e.target.value)} 
                 />
                 <textarea
                     className="w-full p-2 border rounded mb-4"

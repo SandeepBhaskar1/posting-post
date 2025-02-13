@@ -1,4 +1,3 @@
-// server.js
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
@@ -12,11 +11,9 @@ const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI;
 const JWT_SECRET = process.env.JWT_SECRET;
 
-// Set allowed origins based on environment
 const allowedOrigins = [
     process.env.FRONTEND_LOCAL_URL,
     process.env.FRONTEND_CLOUD_URL,
-    'https://your-frontend-domain.vercel.app'  // Replace with your actual Vercel frontend domain
 ];
 
 // Configure CORS
@@ -55,7 +52,7 @@ const connectDB = async () => {
         console.log('Connected to MongoDB');
     } catch (err) {
         console.error('MongoDB connection error:', err);
-        setTimeout(connectDB, 5000); // Retry after 5 seconds
+        setTimeout(connectDB, 5000);
     }
 };
 
@@ -236,12 +233,11 @@ app.post('/login', async (req, res) => {
             { expiresIn: '24h' }
         );
 
-        // Set cookie with appropriate options for Vercel deployment
         res.cookie('auth_token', token, {
             httpOnly: true,
-            secure: true, // Always use secure in production
-            sameSite: 'none', // Required for cross-site cookies
-            maxAge: 24 * 60 * 60 * 1000, // 24 hours
+            secure: true, 
+            sameSite: 'none', 
+            maxAge: 24 * 60 * 60 * 1000, 
             path: '/',
         });
 
