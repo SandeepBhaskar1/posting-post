@@ -1,3 +1,4 @@
+// server.js
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
@@ -10,18 +11,55 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI;
 const JWT_SECRET = process.env.JWT_SECRET;
-const FRONTEND_URI = process.env.NODE_ENV === 'production' 
-    ? process.env.FRONTEND_CLOUD_URL 
-    : process.env.FRONTEND_LOCAL_URL;
+
+// Set allowed origins based on environment
+const allowedOrigins = [
+    process.env.FRONTEND_LOCAL_URL,
+    process.env.FRONTEND_CLOUD_URL,
+    'https://your-frontend-domain.vercel.app'  // Replace with your actual Vercel frontend domain
+];
+
+// Configure CORS
+app.use(cors({
+    origin: function (origin, callback) {
+        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true
+}));
 
 app.use(express.json());
 app.use(cookieParser());
-app.use(cors({
-    origin: FRONTEND_URI,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'], 
-    credentials: true,
-}));
+
+// Add security headers
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    next();
+});
+
+// MongoDB connection with retry logic
+const connectDB = async () => {
+    try {
+        await mongoose.connect(MONGO_URI, {
+            useNewUrlParser: true,
+            useUnifiedTopology: true,
+            serverSelectionTimeoutMS: 5000,
+            socketTimeoutMS: 45000,
+        });
+        console.log('Connected to MongoDB');
+    } catch (err) {
+        console.error('MongoDB connection error:', err);
+        setTimeout(connectDB, 5000); // Retry after 5 seconds
+    }
+};
+
+connectDB();
 
 // Authentication middleware
 const authenticateToken = (req, res, next) => {
@@ -31,16 +69,16 @@ const authenticateToken = (req, res, next) => {
         return res.status(401).json({ message: 'Please login to continue' });
     }
     
-    jwt.verify(token, JWT_SECRET, (err, decoded) => {
-        if (err) {
-            return res.status(401).json({ message: 'Unauthorized', error: err });
-        }
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET);
         req.user = decoded;
         next();
-    });
+    } catch (err) {
+        return res.status(401).json({ message: 'Unauthorized', error: err.message });
+    }
 };
 
-// User schema definition
+// User Schema
 const userSchema = new mongoose.Schema({
     firstName: { type: String, required: true },
     lastName: { type: String, required: true },
@@ -60,7 +98,7 @@ const userSchema = new mongoose.Schema({
 
 const User = mongoose.model('User', userSchema);
 
-// Post schema definition
+// Post Schema
 const postsSchema = new mongoose.Schema({
     title: { type: String, required: true },
     content: { type: String, required: true },
@@ -75,36 +113,33 @@ const postsSchema = new mongoose.Schema({
 
 const Post = mongoose.model('Post', postsSchema);
 
-mongoose.connect(MONGO_URI)
-    .then(() => console.log('Connected to MongoDB'))
-    .catch((err) => console.log('Cannot connect to MongoDB', err));
-
-// Check authentication status
+// Routes
 app.get('/checkAuth', authenticateToken, async (req, res) => {
-    const user = await User.findById(req.user.userID);
-    res.status(200).json({
-        isAuthenticated: true,
-        user: {
-            firstName: user.firstName,
-            lastName: user.lastName,
-        },
-    });
-});
-
-// Protected home route
-app.get('/', authenticateToken, (req, res) => {
-    res.status(200).json({
-        message: 'Welcome to home page',
-        user: req.user,
-    });
+    try {
+        const user = await User.findById(req.user.userID);
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+        res.status(200).json({
+            isAuthenticated: true,
+            user: {
+                firstName: user.firstName,
+                lastName: user.lastName,
+            },
+        });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
 });
 
 app.get('/posts', async (req, res) => {
     try {
-        const posts = await Post.find().populate('author', 'firstName lastName createdAt').sort({ createdAt: -1 });
+        const posts = await Post.find()
+            .populate('author', 'firstName lastName createdAt')
+            .sort({ createdAt: -1 });
         res.json({ posts });
     } catch (error) {
-        res.status(404).json({ message: 'Failed to fetch posts' });
+        res.status(500).json({ message: 'Failed to fetch posts', error: error.message });
     }
 });
 
@@ -140,18 +175,12 @@ app.post('/post', authenticateToken, async (req, res) => {
         });
 
         await user.save();
-
-        res.status(201).json({
-            message: 'Post added successfully',
-            post: newPost,
-        });
+        res.status(201).json({ message: 'Post added successfully', post: newPost });
     } catch (err) {
-        console.error('Error while adding the post:', err);
         res.status(500).json({ message: 'Error occurred while adding the post', error: err.message });
     }
 });
 
-// Register route
 app.post('/register', async (req, res) => {
     const { firstName, lastName, dateOfBirth, gender, emailID, phoneNumber, password } = req.body;
 
@@ -166,7 +195,6 @@ app.post('/register', async (req, res) => {
         }
 
         const hashedPassword = await bcrypt.hash(password, 12);
-
         const newUser = new User({
             firstName,
             lastName,
@@ -180,12 +208,10 @@ app.post('/register', async (req, res) => {
         await newUser.save();
         return res.status(201).json({ message: 'Registration successful!' });
     } catch (err) {
-        console.error(err);
-        return res.status(500).json({ message: 'Error occurred while registering' });
+        return res.status(500).json({ message: 'Error occurred while registering', error: err.message });
     }
 });
 
-// Login route
 app.post('/login', async (req, res) => {
     const { emailID, password } = req.body;
 
@@ -210,11 +236,12 @@ app.post('/login', async (req, res) => {
             { expiresIn: '24h' }
         );
 
+        // Set cookie with appropriate options for Vercel deployment
         res.cookie('auth_token', token, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
+            secure: true, // Always use secure in production
+            sameSite: 'none', // Required for cross-site cookies
             maxAge: 24 * 60 * 60 * 1000, // 24 hours
-            sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
             path: '/',
         });
 
@@ -226,24 +253,28 @@ app.post('/login', async (req, res) => {
             },
         });
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: 'Error occurred during login' });
+        return res.status(500).json({ message: 'Error occurred during login', error: err.message });
     }
 });
 
-// Logout route
 app.post('/logout', authenticateToken, (req, res) => {
     res.cookie('auth_token', '', {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: true,
+        sameSite: 'none',
         expires: new Date(0),
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
         path: '/',
     });
 
     return res.status(200).json({ message: 'Logout successful' });
 });
 
+// Error handling middleware
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).json({ message: 'Something went wrong!', error: err.message });
+});
+
 app.listen(PORT, () => {
-    console.log(`Server is listening on http://localhost:${PORT}`);
+    console.log(`Server is running on port ${PORT}`);
 });

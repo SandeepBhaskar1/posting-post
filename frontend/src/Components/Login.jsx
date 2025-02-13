@@ -1,36 +1,57 @@
+// Login.jsx
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const Login = () => {
-    const BACKEND_URL = import.meta.env.MODE === 'production' ? 
-        import.meta.env.VITE_BACKEND_CLOUD_URL : import.meta.env.VITE_BACKEND_LOCAL_URL;
+    const BACKEND_URL = import.meta.env.MODE === 'production'
+        ? import.meta.env.VITE_BACKEND_CLOUD_URL
+        : import.meta.env.VITE_BACKEND_LOCAL_URL;
 
     const [user, setUser] = useState({
         emailID: '',
         password: ''
     });
-
+    const [isLoading, setIsLoading] = useState(false);
     const [errorMessage, setErrorMessage] = useState('');
     const navigate = useNavigate();
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        setIsLoading(true);
+        setErrorMessage('');
 
-        const response = await fetch(`${BACKEND_URL}/login`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(user),
-            credentials: 'include', 
-        });
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
-        const result = await response.json();
+            const response = await fetch(`${BACKEND_URL}/login`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(user),
+                credentials: 'include',
+                signal: controller.signal
+            });
 
-        if (response.ok) {
-            navigate('/'); 
-        } else {
-            setErrorMessage(result.message || 'Error while logging in');
+            clearTimeout(timeoutId);
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Login failed');
+            }
+
+            const data = await response.json();
+            navigate('/');
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                setErrorMessage('Request timed out. Please try again.');
+            } else {
+                setErrorMessage(error.message || 'Error during login. Please try again.');
+            }
+            console.error('Login error:', error);
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -54,9 +75,10 @@ const Login = () => {
                             id="emailID"
                             value={user.emailID}
                             onChange={handleChange}
-                            autoComplete="user-name"
+                            autoComplete="username"
                             required
                             className="w-full px-4 py-2 mt-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            disabled={isLoading}
                         />
                     </div>
                     <div className="mb-6">
@@ -70,22 +92,27 @@ const Login = () => {
                             autoComplete="current-password"
                             required
                             className="w-full px-4 py-2 mt-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            disabled={isLoading}
                         />
                     </div>
                     <div className="mb-4">
                         <button
                             type="submit"
-                            className="w-full py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition duration-300"
+                            className="w-full py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition duration-300 disabled:opacity-50"
+                            disabled={isLoading}
                         >
-                            Login
+                            {isLoading ? 'Logging in...' : 'Login'}
                         </button>
                     </div>
                 </form>
-                {errorMessage && <div className="text-red-500 text-center mt-4">{errorMessage}</div>}
+                {errorMessage && (
+                    <div className="text-red-500 text-center mt-4">{errorMessage}</div>
+                )}
                 <div className="text-center mt-4">
                     <button
                         onClick={() => navigate('/register')}
                         className="text-blue-500 underline"
+                        disabled={isLoading}
                     >
                         Create Account
                     </button>
