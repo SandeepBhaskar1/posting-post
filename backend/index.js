@@ -79,17 +79,6 @@ mongoose.connect(MONGO_URI)
     .then(() => console.log('Connected to MongoDB'))
     .catch((err) => console.log('Cannot connect to MongoDB', err));
 
-const getUser = (req, res) => {
-    User.find({})
-        .populate({ path: 'posts._id', model: 'Post' })
-        .then((list) => {
-            res.send(list);
-        })
-        .catch((err) => {
-            res.send(err);
-        });
-};
-
 // Check authentication status
 app.get('/checkAuth', authenticateToken, async (req, res) => {
     const user = await User.findById(req.user.userID);
@@ -112,13 +101,12 @@ app.get('/', authenticateToken, (req, res) => {
 
 app.get('/posts', async (req, res) => {
     try {
-        const posts = await Post.find().populate('author', 'firstName lastName creattedAt ').sort({createdAt: -1});
+        const posts = await Post.find().populate('author', 'firstName lastName createdAt').sort({ createdAt: -1 });
         res.json({ posts });
     } catch (error) {
         res.status(404).json({ message: 'Failed to fetch posts' });
     }
 });
-
 
 app.post('/post', authenticateToken, async (req, res) => {
     const { title, content } = req.body;
@@ -128,13 +116,11 @@ app.post('/post', authenticateToken, async (req, res) => {
     }
 
     try {
-        // Find the user first to get their details
         const user = await User.findById(req.user.userID);
         if (!user) {
             return res.status(404).json({ message: 'User not found' });
         }
 
-        // Create a new post with user details
         const newPost = await Post.create({
             title,
             content,
@@ -146,7 +132,6 @@ app.post('/post', authenticateToken, async (req, res) => {
             }
         });
 
-        // Add post details to user's posts array
         user.posts.push({
             _id: newPost._id,
             title: newPost.title,
@@ -154,7 +139,6 @@ app.post('/post', authenticateToken, async (req, res) => {
             createdAt: newPost.createdAt
         });
 
-        // Save the user with the updated posts array
         await user.save();
 
         res.status(201).json({
@@ -165,14 +149,6 @@ app.post('/post', authenticateToken, async (req, res) => {
         console.error('Error while adding the post:', err);
         res.status(500).json({ message: 'Error occurred while adding the post', error: err.message });
     }
-});
-
-// Dashboard route
-app.get('/dashboard', authenticateToken, (req, res) => {
-    res.status(200).json({
-        message: 'Welcome to dashboard',
-        user: req.user,
-    });
 });
 
 // Register route
